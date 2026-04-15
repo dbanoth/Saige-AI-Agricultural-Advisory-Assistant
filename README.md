@@ -263,4 +263,4 @@ saige/
 
 Built by **David** as a Generative AI Engineer at **Oatmeal AI** — a platform designed to make expert agricultural knowledge accessible to every farmer through conversational AI.
 
-**Connect:** [LinkedIn](https://linkedin.com/in/your-profile) · [GitHub](https://github.com/your-username)
+**Connect:** [LinkedIn](www.linkedin.com/in/devidbanoth) · [GitHub](https://github.com/dbanoth)
