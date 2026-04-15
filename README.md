@@ -1,6 +1,6 @@
 # Saige — AI Agricultural Advisory Assistant
 
-> A production-ready conversational AI system that guides farmers through personalized diagnostics across livestock, crops, weather, and market intelligence — powered by Google Gemini, LangGraph, and Retrieval-Augmented Generation.
+> A production-ready conversational AI system built at **Oatmeal AI** that guides farmers through personalized diagnostics across livestock, crops, weather, and market intelligence — powered by Google Gemini, LangGraph, and Retrieval-Augmented Generation.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat&logo=fastapi&logoColor=white)
@@ -9,30 +9,34 @@
 ![Redis](https://img.shields.io/badge/Redis-7+-DC382D?style=flat&logo=redis&logoColor=white)
 ![Firestore](https://img.shields.io/badge/Firestore-Vector_Search-FFCA28?style=flat&logo=firebase&logoColor=black)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat)
+
+> **Note:** This project was developed as part of my work at **Oatmeal AI**. The source code is proprietary and not publicly available. This README documents the architecture, design decisions, and engineering work I contributed to the project.
 
 ---
 
-## What is Saige?
+## Overview
 
-Saige is an intelligent conversational AI assistant built for farmers. It conducts a structured diagnostic conversation, learns about the farmer's context — their location, crops, livestock, and problems — and then routes the query to a specialized advisory engine to deliver precise, actionable recommendations.
+Saige is a conversational AI assistant built for farmers. Instead of giving generic advice, it conducts a structured diagnostic conversation — asking smart, context-aware questions to understand the farmer's location, farm size, crops or livestock, and current problems. Once it has enough context, it automatically routes the query to the right specialist advisory engine and returns precise, actionable recommendations.
 
-It is built on a **multi-node LangGraph agentic workflow**, a **RAG pipeline backed by Firestore vector search**, and a **production FastAPI backend** with Redis for session memory and rate limiting.
+The system was designed from the ground up to be production-ready — with multi-agent orchestration, RAG-powered knowledge retrieval, real-time weather integration, secure authentication, Redis-backed session memory, and full cloud deployment on GCP.
 
 ---
 
-## Features
+## My Role
 
-- **Multi-domain Advisory** — covers Livestock, Crops, Weather, Agricultural News, and Product Knowledge
-- **Conversational Assessment** — up to 8 structured diagnostic questions to build full farm context before advising
-- **Hybrid Query Routing** — combines keyword scoring with LLM classification to route queries to the right advisory node
-- **RAG-Powered Knowledge** — retrieves domain-specific knowledge from Firestore vector collections using `text-embedding-004`
-- **Real-Time Weather Integration** — fetches live conditions and forecasts via Open-Meteo as a LangChain tool
-- **Short-Term Memory** — Redis message buffer keeps the last N conversation turns for fast in-context injection
-- **Long-Term Persistence** — every conversation thread is stored in Firestore with full analytics support
-- **JWT Authentication** — secure HS256 Bearer token verification on all protected endpoints
-- **Rate Limiting** — Redis-backed per-thread rate limiting (fail-open by design)
-- **Graceful Fallbacks** — Redis and RAG degrade gracefully if unavailable, keeping the system running
+**Generative AI Engineer** at Oatmeal AI
+
+I was responsible for the full design and implementation of the Saige backend — from the LangGraph agentic workflow and RAG pipeline, to the FastAPI REST API, cloud infrastructure, and test suite. Key contributions include:
+
+- Architected the entire multi-node LangGraph StateGraph pipeline with six advisory domains
+- Built the RAG pipeline using Firestore vector search and `text-embedding-004` embeddings
+- Integrated Google Gemini 2.5 Flash Lite via LangChain for structured LLM output and query classification
+- Designed a hybrid keyword + LLM classifier for intelligent query routing
+- Built the FastAPI REST API with JWT authentication, rate limiting, and health monitoring
+- Implemented Redis-backed short-term memory and LangGraph checkpointing for session continuity
+- Designed Firestore schemas for long-term chat persistence and conversation analytics
+- Integrated real-time weather data via Open-Meteo as a LangChain tool
+- Containerized the full stack with Docker and deployed to GCP
 
 ---
 
@@ -49,6 +53,8 @@ Frontend (Next.js / React 19)
           │
           ├── Firestore      → Long-term chat history & thread persistence
           │                  → RAG knowledge collections (vector search)
+          │
+          ├── Google Cloud SQL → Structured relational data
           │
           └── LangGraph StateGraph
                     │
@@ -69,136 +75,93 @@ Frontend (Next.js / React 19)
 
 ---
 
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| LLM | Google Gemini 2.5 Flash Lite (`langchain-google-genai` / Vertex AI) |
-| AI Orchestration | LangGraph (StateGraph, conditional edges, interrupts, checkpointing) |
-| RAG | Firestore Vector Search + `text-embedding-004` |
-| API | FastAPI 0.100+ / Uvicorn |
-| Short-Term Memory | Redis (message buffer + LangGraph RedisSaver) |
-| Long-Term Storage | Google Cloud Firestore |
-| Weather | Open-Meteo API (via LangChain tool wrapper) |
-| Database | Google Cloud SQL |
-| Authentication | JWT HS256 (`python-jose`) |
-| Validation | Pydantic v2 |
-| Frontend | Next.js, React 19, TypeScript, Tailwind CSS |
-| Containerization | Docker, Docker Compose |
-| Testing | pytest (unit + integration) |
-
----
-
-## Project Structure
-
-```
-saige/
-├── api.py                  # FastAPI app, endpoints, rate limiting, middleware
-├── graph.py                # LangGraph StateGraph construction and compilation
-├── nodes.py                # All node functions, routing logic, advisory engine
-├── models.py               # FarmState TypedDict and Pydantic models
-├── config.py               # Centralized env-var configuration and feature flags
-├── llm.py                  # Google Gemini LLM initialization
-├── rag.py                  # Firestore vector search (livestock, plant, bakasura, news)
-├── chat_history.py         # Firestore-backed conversation persistence
-├── message_buffer.py       # Redis short-term message buffer (last N messages)
-├── jwt_auth.py             # JWT Bearer token verification (FastAPI dependency)
-├── redis_client.py         # RedisClientManager (connection pooling, health checks)
-├── weather.py              # Open-Meteo weather service and LangChain tool wrapper
-├── database.py             # Google Cloud SQL query helpers
-├── Data_Contract.py        # Pydantic data contracts for external integrations
-├── main.py                 # Application entry point / server startup
-├── sync_embeddings.py      # Script to sync embeddings into Firestore RAG collections
-├── seed_firestore.py       # Script to seed initial knowledge data into Firestore
-├── test_api_flow.py        # Integration tests for the full API flow
-├── test_main.py            # Unit tests for core logic
-└── test_redis.py           # Redis connectivity and buffer tests
-```
-
----
-
 ## How It Works
 
-Saige follows a three-phase conversation loop:
+Saige operates in three phases:
 
-**1. Assessment** — Saige opens with an open-ended question and guides the farmer through up to 8 structured turns to gather location, farm size, crops/animals, and current problems. Each answer is classified and stored in a typed `FarmState`.
+**Phase 1 — Assessment**
 
-**2. Routing** — Once the assessment is complete, a hybrid classifier (keyword scoring + LLM fallback) reads the assessment summary and selects one of six advisory routes: `weather`, `livestock`, `crops`, `mixed`, `news`, or `bakasura`.
+Saige opens with an open-ended question and guides the farmer through up to 8 structured diagnostic turns. Each response is classified by an LLM with structured output (`AssessmentDecision`) and stored into a typed `FarmState` — capturing location, farm size, crops or animals, and current problems. The assessment ends when the LLM determines it has sufficient context.
 
-**3. Advisory** — The selected node fetches relevant RAG context from Firestore vector collections and/or live weather data, then generates a final advisory response via Gemini — structured with recommendations and an optional quiz UI.
+**Phase 2 — Routing**
 
----
+A hybrid classifier reads the completed `assessment_summary`. It first applies keyword scoring across domain-specific keyword sets (livestock, crops, weather, news), then falls back to an LLM classifier (`QueryClassification`) if scores are ambiguous. The result is one of six advisory routes: `weather`, `livestock`, `crops`, `mixed`, `news`, or `bakasura`.
 
-## Getting Started
+**Phase 3 — Advisory**
 
-### Prerequisites
-
-- Python 3.11+
-- Redis 7+
-- Google Cloud project (Firestore + Vertex AI enabled)
-- Node.js 18+ (frontend)
-
-### Backend Setup
-
-```bash
-# Clone the repo
-git clone https://github.com/your-username/saige.git
-cd saige
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Fill in your keys in .env
-```
-
-### Run with Docker (Recommended)
-
-```bash
-docker compose up --build
-```
-
-This starts the FastAPI backend on `http://localhost:8000` and Redis on port `6379`.
-
-### Run Manually
-
-```bash
-# Backend
-uvicorn api:app --reload --port 8000
-
-# Frontend
-cd frontend
-npm install && npm run dev
-```
-
-### Seed Knowledge Data
-
-```bash
-python seed_firestore.py       # Load initial RAG knowledge into Firestore
-python sync_embeddings.py      # Sync/refresh vector embeddings
-```
+The selected advisory node fetches relevant context from its Firestore RAG collection using `text-embedding-004` vector embeddings (top-K = 10). For weather queries, it calls the Open-Meteo API via a LangChain tool wrapper. The node then passes the retrieved context and farm state to Google Gemini to generate a structured advisory response with recommendations and an optional quiz-style UI.
 
 ---
 
-## API Overview
+## LangGraph State Design
 
-All endpoints except health checks require a JWT Bearer token.
+The entire conversation is tracked in a typed `FarmState`:
 
-```
-POST   /chat                        → Main advisory endpoint
-GET    /threads                     → List conversation threads (paginated)
-GET    /threads/{id}/messages       → Fetch thread messages (paginated)
-DELETE /threads/{id}                → Delete a thread
-GET    /analytics                   → Conversation stats
-GET    /health/firestore            → Firestore health check
-GET    /health/redis                → Redis health check
-GET    /ready                       → Full readiness probe
-```
+| Field | Type | Purpose |
+|---|---|---|
+| `location` | `str` | Farmer's location for weather queries |
+| `farm_size` | `str` | Farm area |
+| `crops` | `List[str]` | Crops or animals being raised |
+| `current_issues` | `List[str]` | Reported problems or goals |
+| `history` | `List[str]` | Conversation turns |
+| `assessment_summary` | `str` | Compact summary produced at assessment completion |
+| `advisory_type` | `str` | Final routed type: weather / livestock / crops / mixed |
+| `diagnosis` | `str` | Final advisory text |
+| `recommendations` | `List[str]` | Structured recommendations |
+| `weather_conditions` | `dict` | Fetched weather data |
+
+---
+
+## RAG Pipeline
+
+All knowledge retrieval uses Firestore vector search with `text-embedding-004` embeddings (top-K = 10).
+
+| Collection | Domain | Used By |
+|---|---|---|
+| `livestock_knowledge` | Animal husbandry, breeds, health | `livestock_advisory_node` |
+| `plant_knowledge` | Crops, soil, disease, agronomy | `crop_advisory_node` |
+| `bakasura-docs` | Oatmeal AI product knowledge | `bakasura_advisory_node` |
+| `news_articles` | Agricultural news, market updates | `news_advisory_node` |
+
+The `mixed_advisory_node` queries all three advisory collections simultaneously and merges the results before generating a response.
+
+---
+
+## Session Memory Design
+
+### Short-Term Memory (Redis)
+
+Redis stores the last `N` messages per thread for fast in-context injection at query time. Each message is serialized with role, content, timestamp, and metadata. The buffer uses a `LPUSH + LTRIM` pattern to maintain a rolling window with a 24-hour TTL.
+
+Key format: `thread:{thread_id}:last_messages`
+
+### Long-Term Persistence (Firestore)
+
+Every conversation is persisted to Firestore under a `threads/{thread_id}` document with a `messages` subcollection. Thread metadata includes status, advisory type, message count, and farm context. The API supports paginated thread and message retrieval, and an analytics endpoint aggregates completion rates and advisory type distributions.
+
+### LangGraph Checkpointing
+
+The StateGraph is compiled with `RedisSaver` when Redis is available, enabling persistent graph checkpointing across restarts. If Redis is unavailable, the system falls back to `MemorySaver` automatically with no impact to the user.
+
+---
+
+## API Endpoints
+
+All endpoints except health checks require a valid JWT Bearer token.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/chat` | Main advisory endpoint |
+| `GET` | `/threads` | List conversation threads (paginated) |
+| `GET` | `/threads/{id}/messages` | Fetch thread messages (paginated) |
+| `DELETE` | `/threads/{id}` | Delete a thread and all messages |
+| `GET` | `/analytics` | Conversation stats for the authenticated user |
+| `GET` | `/health` | API liveness probe |
+| `GET` | `/health/firestore` | Firestore write/read/delete health check |
+| `GET` | `/health/redis` | Redis ping health check |
+| `GET` | `/ready` | Full readiness probe (graph + Redis + Firestore) |
+
+**Rate Limiting:** 20 requests per 60-second window per `thread_id`, backed by Redis `INCR + EXPIRE`. Fails open if Redis is unavailable.
 
 **Example Request:**
 
@@ -209,7 +172,7 @@ curl -X POST http://localhost:8000/chat \
   -d '{"user_input": "my cattle have been losing weight", "thread_id": "thread_abc123"}'
 ```
 
-**Example Response:**
+**Assessment Response:**
 
 ```json
 {
@@ -222,61 +185,82 @@ curl -X POST http://localhost:8000/chat \
 }
 ```
 
----
+**Advisory Response:**
 
-## Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-# Auth
-SECRET_KEY=your_jwt_secret_key
-
-# Google / Gemini
-GOOGLE_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-flash-lite
-
-# Firestore
-GOOGLE_CLOUD_PROJECT=your-gcp-project
-FIRESTORE_DATABASE=charlie
-CHAT_HISTORY_DATABASE=chat-history
-
-# Redis
-REDIS_ENABLED=true
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# Frontend
-FRONTEND_URL=http://localhost:3000
-```
-
-See the full variable reference in the [documentation](README.md#configuration).
-
----
-
-## Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run specific test files
-pytest test_api_flow.py
-pytest test_redis.py
-pytest test_main.py
+```json
+{
+  "status": "complete",
+  "advice": "Based on your farm context, your cattle may be experiencing nutritional deficiency...",
+  "advisory_type": "livestock",
+  "recommendations": ["Check feed quality", "Consult a vet for blood panel", "Review pasture rotation"]
+}
 ```
 
 ---
 
-## About the Developer
+## Tech Stack
 
-Built by **David** as part of the **Oatmeal AI** platform — a Generative AI system designed to make expert agricultural knowledge accessible to every farmer through conversational AI.
-
-**Role:** Generative AI Engineer
-**Stack:** LangGraph · LangChain · Google Gemini · FastAPI · RAG · Redis · Firestore · Docker
+| Layer | Technology |
+|---|---|
+| LLM | Google Gemini 2.5 Flash Lite (`langchain-google-genai` / Vertex AI) |
+| AI Orchestration | LangGraph (StateGraph, conditional edges, interrupts, checkpointing) |
+| RAG | Firestore Vector Search + `text-embedding-004` |
+| API | FastAPI 0.100+ / Uvicorn |
+| Short-Term Memory | Redis (message buffer + LangGraph RedisSaver) |
+| Long-Term Storage | Google Cloud Firestore |
+| Relational Database | Google Cloud SQL |
+| Weather | Open-Meteo API (LangChain tool wrapper) |
+| Authentication | JWT HS256 (`python-jose`) |
+| Validation | Pydantic v2 |
+| Frontend | Next.js, React 19, TypeScript, Tailwind CSS |
+| Containerization | Docker, Docker Compose |
+| Cloud | GCP (Vertex AI, Firestore, Memorystore Redis, Cloud SQL) |
+| Testing | pytest (unit + integration) |
 
 ---
 
-## License
+## Project Structure
 
-This project is licensed under the MIT License.
+```
+saige/
+├── api.py                  # FastAPI app, endpoints, rate limiting, middleware
+├── graph.py                # LangGraph StateGraph construction and compilation
+├── nodes.py                # All node functions, routing logic, advisory engine
+├── models.py               # FarmState TypedDict and Pydantic models
+├── config.py               # Centralized configuration and feature flags
+├── llm.py                  # Google Gemini LLM initialization
+├── rag.py                  # Firestore vector search across all collections
+├── chat_history.py         # Firestore-backed conversation persistence
+├── message_buffer.py       # Redis short-term message buffer
+├── jwt_auth.py             # JWT Bearer token verification
+├── redis_client.py         # Redis connection pooling and health checks
+├── weather.py              # Open-Meteo weather service + LangChain tool
+├── database.py             # Google Cloud SQL query helpers
+├── Data_Contract.py        # Pydantic data contracts for external integrations
+├── main.py                 # Application entry point
+├── sync_embeddings.py      # Sync embeddings into Firestore RAG collections
+├── seed_firestore.py       # Seed initial knowledge data into Firestore
+├── test_api_flow.py        # Integration tests for full API flow
+├── test_main.py            # Unit tests for core logic
+└── test_redis.py           # Redis connectivity and buffer tests
+```
+
+---
+
+## Key Engineering Decisions
+
+**Why LangGraph over a simple chain?** The diagnostic conversation requires stateful, multi-turn logic with conditional branching — LangGraph's StateGraph and interrupt mechanism made this clean and maintainable compared to a linear chain.
+
+**Why Firestore for RAG?** Firestore's native vector search with `text-embedding-004` eliminated the need for a separate vector database, reducing infrastructure complexity while still supporting top-K similarity retrieval across multiple knowledge collections.
+
+**Why Redis for short-term memory?** Injecting recent conversation history into each LLM call is critical for coherent multi-turn conversations. Redis provides sub-millisecond access and TTL-based automatic cleanup, making it ideal for session-scoped memory.
+
+**Why a hybrid router?** Pure keyword routing is fast but breaks on ambiguous queries. Pure LLM routing is accurate but slow. The hybrid approach — keyword scoring first, LLM fallback only when needed — balances speed and accuracy.
+
+---
+
+## About
+
+Built by **David** as a Generative AI Engineer at **Oatmeal AI** — a platform designed to make expert agricultural knowledge accessible to every farmer through conversational AI.
+
+**Connect:** [LinkedIn](https://linkedin.com/in/your-profile) · [GitHub](https://github.com/your-username)
