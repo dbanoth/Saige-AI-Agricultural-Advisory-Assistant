@@ -10,7 +10,7 @@
 ![Firestore](https://img.shields.io/badge/Firestore-Vector_Search-FFCA28?style=flat&logo=firebase&logoColor=black)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)
 
-> **Note:** This project was developed as part of my work at **Oatmeal AI**. The source code is proprietary and not publicly available. This README documents the architecture, design decisions, and engineering work I contributed to the project.
+> **Note:** This project was developed as part of my work at [**Oatmeal AI**](https://oatmeal-ai.com/). The source code is proprietary and not publicly available. This README documents the architecture, design decisions, and engineering work I contributed to the project.
 
 ---
 
