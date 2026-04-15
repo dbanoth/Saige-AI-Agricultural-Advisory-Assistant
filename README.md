@@ -1,6 +1,3 @@
-# Saige-AI-Agricultural-Advisory-Assistant
-Saige is a conversational AI assistant that helps farmers get expert advice through natural chat. It diagnoses farm problems by asking smart questions, then routes to specialized engines covering livestock, crops, weather, and news — powered by Google Gemini, LangGraph, RAG, and Firestore vector search.
-
 # Saige — AI Agricultural Advisory Assistant
 
 > A production-ready conversational AI system that guides farmers through personalized diagnostics across livestock, crops, weather, and market intelligence — powered by Google Gemini, LangGraph, and Retrieval-Augmented Generation.
