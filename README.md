@@ -71,7 +71,8 @@ Frontend (Next.js / React 19)
                               └── Google Gemini 2.5 Flash Lite
 ```
 
-![Farm Advisory Graph](farm_advisory_graph.png)
+![Farm Advisory Graph](<img width="998" height="432" alt="image" src="https://github.com/user-attachments/assets/5da369e3-de8f-40f6-982a-9beb204cda4c" />)
+
 
 ---
 
