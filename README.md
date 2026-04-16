@@ -220,33 +220,6 @@ curl -X POST http://localhost:8000/chat \
 
 ---
 
-## Project Structure
-
-```
-saige/
-├── api.py                  # FastAPI app, endpoints, rate limiting, middleware
-├── graph.py                # LangGraph StateGraph construction and compilation
-├── nodes.py                # All node functions, routing logic, advisory engine
-├── models.py               # FarmState TypedDict and Pydantic models
-├── config.py               # Centralized configuration and feature flags
-├── llm.py                  # Google Gemini LLM initialization
-├── rag.py                  # Firestore vector search across all collections
-├── chat_history.py         # Firestore-backed conversation persistence
-├── message_buffer.py       # Redis short-term message buffer
-├── jwt_auth.py             # JWT Bearer token verification
-├── redis_client.py         # Redis connection pooling and health checks
-├── weather.py              # Open-Meteo weather service + LangChain tool
-├── database.py             # Google Cloud SQL query helpers
-├── Data_Contract.py        # Pydantic data contracts for external integrations
-├── main.py                 # Application entry point
-├── sync_embeddings.py      # Sync embeddings into Firestore RAG collections
-├── seed_firestore.py       # Seed initial knowledge data into Firestore
-├── test_api_flow.py        # Integration tests for full API flow
-├── test_main.py            # Unit tests for core logic
-└── test_redis.py           # Redis connectivity and buffer tests
-```
-
----
 
 ## Key Engineering Decisions
 
