@@ -1,6 +1,6 @@
 # Saige — AI Agricultural Advisory Assistant
 
-> A production-ready conversational AI system built at **Oatmeal AI** that guides farmers through personalized diagnostics across livestock, crops, weather, and market intelligence — powered by Google Gemini, LangGraph, and Retrieval-Augmented Generation.
+> A production conversational AI system built at **Oatmeal AI** that helps farmers get farm-specific advice in chat — across crops, livestock, weather, monitoring, and market news — and never changes farm data unless a person approves it.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat&logo=fastapi&logoColor=white)
@@ -10,15 +10,15 @@
 ![Firestore](https://img.shields.io/badge/Firestore-Vector_Search-FFCA28?style=flat&logo=firebase&logoColor=black)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)
 
-> **Note:** This project was developed as part of my work at [**Oatmeal AI**](https://oatmeal-ai.com/). The source code is proprietary and not publicly available. This README documents the architecture, design decisions, and engineering work I contributed to the project.
+> **Note:** This project was developed as part of my work at [**Oatmeal AI**](https://oatmeal-ai.com/). The source code is proprietary and not publicly available. This README documents the architecture, design decisions, and engineering work I contributed.
 
 ---
 
 ## Overview
 
-Saige is a conversational AI assistant built for farmers. Instead of giving generic advice, it conducts a structured diagnostic conversation — asking smart, context-aware questions to understand the farmer's location, farm size, crops or livestock, and current problems. Once it has enough context, it automatically routes the query to the right specialist advisory engine and returns precise, actionable recommendations.
+Saige is the farm assistant inside Oatmeal AI. A farmer asks in plain language — “my tomato leaves are yellow,” “should I irrigate the north field,” “update my business phone” — and Saige answers from the farmer’s account, live weather, and a retrieval-backed knowledge base.
 
-The system was designed from the ground up to be production-ready — with multi-agent orchestration, RAG-powered knowledge retrieval, real-time weather integration, secure authentication, Redis-backed session memory, and full cloud deployment on GCP.
+Reads happen in the same turn. Writes do not. Specialist agents can look things up, but they cannot mutate farm data. A write is proposed, checked, and shown to the farmer as approve, edit, or reject. Only an allowlisted tool runs after that approval.
 
 ---
 
@@ -26,176 +26,169 @@ The system was designed from the ground up to be production-ready — with multi
 
 **Generative AI Engineer** at Oatmeal AI
 
-I was responsible for the full design and implementation of the Saige backend — from the LangGraph agentic workflow and RAG pipeline, to the FastAPI REST API, cloud infrastructure, and test suite. Key contributions include:
+I designed and built the Saige backend: the agent graph, the retrieval pipeline, the API, and the write-approval boundary. Contributions include:
 
-- Architected the entire multi-node LangGraph StateGraph pipeline with six advisory domains
-- Built the RAG pipeline using Firestore vector search and `text-embedding-004` embeddings
-- Integrated Google Gemini 2.5 Flash Lite via LangChain for structured LLM output and query classification
-- Designed a hybrid keyword + LLM classifier for intelligent query routing
-- Built the FastAPI REST API with JWT authentication, rate limiting, and health monitoring
-- Implemented Redis-backed short-term memory and LangGraph checkpointing for session continuity
-- Designed Firestore schemas for long-term chat persistence and conversation analytics
-- Integrated real-time weather data via Open-Meteo as a LangChain tool
-- Containerized the full stack with Docker and deployed to GCP
+- Replaced a single assessment-then-route chain with a supervisor graph that can call one or more specialists in the same turn
+- Kept specialists read-only and moved every mutation behind a human-in-the-loop gate
+- Allowlisted writes at the tool level, with a separate executor per tool so extra model arguments are dropped
+- Added a non-LLM policy check before approval (credentials, restricted inputs, risk class)
+- Built the RAG pipeline on Firestore vector search and `text-embedding-004`
+- Integrated Google Gemini 2.5 Flash Lite for routing, specialist answers, and the final reply
+- Shipped the FastAPI API with JWT auth, per-thread rate limits, SSE streaming, and health checks
+- Used Redis for short-term memory and LangGraph checkpoints, Firestore for chat history, and Cloud SQL for the proposal record
 
 ---
 
 ## Architecture
 
 ```
-Frontend (Next.js / React 19)
-          │
-          ▼
-  FastAPI REST API  ──── JWT Auth ──── Rate Limiter (Redis)
-          │
-          ├── Redis          → Short-term message buffer (last N messages)
-          │                  → LangGraph RedisSaver checkpoints
-          │
-          ├── Firestore      → Long-term chat history & thread persistence
-          │                  → RAG knowledge collections (vector search)
-          │
-          ├── Google Cloud SQL → Structured relational data
-          │
-          └── LangGraph StateGraph
-                    │
-                    ├── assessment_node      ← Builds farm context (up to 8 turns)
-                    ├── routing_node         ← Hybrid keyword + LLM classifier
-                    │
-                    ├── weather_advisory_node
-                    ├── livestock_advisory_node
-                    ├── crop_advisory_node
-                    ├── mixed_advisory_node
-                    ├── bakasura_advisory_node
-                    └── news_advisory_node
-                              │
-                              └── Google Gemini 2.5 Flash Lite
+Frontend (React)
+        │
+        ▼
+FastAPI  ──── JWT ──── Rate limit (Redis)
+        │
+        ├── Redis        short-term memory + graph checkpoints
+        ├── Firestore    chat history + RAG collections
+        ├── Cloud SQL    proposal records (approve / edit / reject)
+        │
+        └── LangGraph
+              User Agent
+                  │
+              Supervisor ── joke ──► end
+                  │
+              Specialists (read-only, one or more)
+                  │
+              Synthesizer
+                  │
+              Policy gate
+                  │
+            ┌─────┴─────┐
+            │           │
+         no write     proposal
+            │           │
+          reply      HITL interrupt
+                        │
+                   approve / edit / reject
+                        │
+                  Execute (allowlisted tools only)
 ```
-
-![Farm Advisory Graph](<img width="998" height="432" alt="image" src="https://github.com/user-attachments/assets/5da369e3-de8f-40f6-982a-9beb204cda4c" />)
-
 
 ---
 
 ## How It Works
 
-Saige operates in three phases:
+**1. User Agent**
 
-**Phase 1 — Assessment**
+Loads who is asking: person, business, active field, preferences, and recent memory. Password fields are never placed in state.
 
-Saige opens with an open-ended question and guides the farmer through up to 8 structured diagnostic turns. Each response is classified by an LLM with structured output (`AssessmentDecision`) and stored into a typed `FarmState` — capturing location, farm size, crops or animals, and current problems. The assessment ends when the LLM determines it has sufficient context.
+**2. Supervisor**
 
-**Phase 2 — Routing**
+A hybrid router picks one or more specialists. Keyword matches run first. If the question is ambiguous, Gemini returns a structured route list. A joke is a short exit and does not enter the specialist loop. When the question belongs to another product assistant, the supervisor records a handoff instead of answering outside Saige’s scope.
 
-A hybrid classifier reads the completed `assessment_summary`. It first applies keyword scoring across domain-specific keyword sets (livestock, crops, weather, news), then falls back to an LLM classifier (`QueryClassification`) if scores are ambiguous. The result is one of six advisory routes: `weather`, `livestock`, `crops`, `mixed`, `news`, or `bakasura`.
+**3. Specialists**
 
-**Phase 3 — Advisory**
+Each specialist is a read-only ReAct loop. Write-shaped tools are stripped before the model is bound, so a specialist can retrieve weather, field status, knowledge-base passages, or account facts, and cannot save, update, or delete. Results come back as packets.
 
-The selected advisory node fetches relevant context from its Firestore RAG collection using `text-embedding-004` vector embeddings (top-K = 10). For weather queries, it calls the Open-Meteo API via a LangChain tool wrapper. The node then passes the retrieved context and farm state to Google Gemini to generate a structured advisory response with recommendations and an optional quiz-style UI.
+**4. Synthesizer**
 
----
+Merges the packets into one farmer-facing answer, with citations when retrieval was used. If the turn includes a change, it emits a proposal (tool name, arguments, risk, short summary) instead of performing the change.
 
-## LangGraph State Design
+**5. Policy, then a person**
 
-The entire conversation is tracked in a typed `FarmState`:
+A deterministic check runs before the model’s proposal is shown. Blocked tools and blocked argument content never reach the farmer as an approvable action. If nothing is proposed, the reply is returned immediately. If a proposal exists, the graph interrupts. The farmer approves, edits the arguments, or rejects. Rejected proposals are not executed.
 
-| Field | Type | Purpose |
-|---|---|---|
-| `location` | `str` | Farmer's location for weather queries |
-| `farm_size` | `str` | Farm area |
-| `crops` | `List[str]` | Crops or animals being raised |
-| `current_issues` | `List[str]` | Reported problems or goals |
-| `history` | `List[str]` | Conversation turns |
-| `assessment_summary` | `str` | Compact summary produced at assessment completion |
-| `advisory_type` | `str` | Final routed type: weather / livestock / crops / mixed |
-| `diagnosis` | `str` | Final advisory text |
-| `recommendations` | `List[str]` | Structured recommendations |
-| `weather_conditions` | `dict` | Fetched weather data |
+**6. Execute**
+
+After approval, a registry runs the tool by name. A name that is not registered never runs. Each executor copies only the fields that tool understands.
 
 ---
 
-## RAG Pipeline
+## Write approval
 
-All knowledge retrieval uses Firestore vector search with `text-embedding-004` embeddings (top-K = 10).
+This is the boundary that keeps the assistant useful without letting it mutate the farm on its own.
 
-| Collection | Domain | Used By |
-|---|---|---|
-| `livestock_knowledge` | Animal husbandry, breeds, health | `livestock_advisory_node` |
-| `plant_knowledge` | Crops, soil, disease, agronomy | `crop_advisory_node` |
-| `bakasura-docs` | Oatmeal AI product knowledge | `bakasura_advisory_node` |
-| `news_articles` | Agricultural news, market updates | `news_advisory_node` |
+| Step | What it decides |
+|---|---|
+| Specialist bind | Write tools are not available. The model can only read. |
+| Proposal | The model names a tool and arguments. It does not call the database. |
+| Policy gate | Hard blocks (credentials, restricted content) and a risk tag. Not an argument schema. |
+| Human | Approve, edit, or reject. An edit merges into the arguments that will run. |
+| Execute registry | Tool-name allowlist. Unknown tools never run. |
 
-The `mixed_advisory_node` queries all three advisory collections simultaneously and merges the results before generating a response.
+Allowlisting is at the **tool**, not at every argument combination. A per-argument schema would be a second API to maintain. Narrow executors drop unused keys, and the human edit step is where argument changes happen.
 
----
-
-## Session Memory Design
-
-### Short-Term Memory (Redis)
-
-Redis stores the last `N` messages per thread for fast in-context injection at query time. Each message is serialized with role, content, timestamp, and metadata. The buffer uses a `LPUSH + LTRIM` pattern to maintain a rolling window with a 24-hour TTL.
-
-Key format: `thread:{thread_id}:last_messages`
-
-### Long-Term Persistence (Firestore)
-
-Every conversation is persisted to Firestore under a `threads/{thread_id}` document with a `messages` subcollection. Thread metadata includes status, advisory type, message count, and farm context. The API supports paginated thread and message retrieval, and an analytics endpoint aggregates completion rates and advisory type distributions.
-
-### LangGraph Checkpointing
-
-The StateGraph is compiled with `RedisSaver` when Redis is available, enabling persistent graph checkpointing across restarts. If Redis is unavailable, the system falls back to `MemorySaver` automatically with no impact to the user.
+Examples of proposed writes: update a business profile, create or edit a field, toggle monitoring, log irrigation, or approve a spray review. Publishing a listing, event, or post stays a draft until the farmer approves it.
 
 ---
 
-## API Endpoints
+## Specialists
 
-All endpoints except health checks require a valid JWT Bearer token.
+| Route | What it covers |
+|---|---|
+| Crop | Disease, soil, agronomy, planting |
+| Livestock | Breeds, health, husbandry |
+| Weather | Current conditions and forecast (Open-Meteo) |
+| Monitoring | Field alerts, scouting, activity context |
+| Account | Profile and field facts for the signed-in business |
+| Product knowledge | Oatmeal AI product and equipment docs |
+| News | Agricultural news and market context |
+
+One turn can hit more than one specialist. “My cattle are losing weight and I changed the corn” can gather livestock and crop context before the synthesizer answers.
+
+---
+
+## RAG
+
+Retrieval uses Firestore vector search with `text-embedding-004` embeddings.
+
+| Collection | Used for |
+|---|---|
+| `livestock_knowledge` | Breeds, health, husbandry |
+| `plant_knowledge` | Crops, soil, disease, agronomy |
+| `bakasura-docs` | Product and equipment knowledge |
+| `news_articles` | Agricultural news and markets |
+
+RAG is skipped cleanly when Firestore or the embedding stack is unavailable. The rest of the turn still runs.
+
+---
+
+## Memory
+
+**Redis** keeps the last N messages per thread (rolling list, 24-hour TTL) and stores LangGraph checkpoints so an in-progress approval survives a restart. If Redis is down, the graph can fall back to in-memory checkpoints.
+
+**Firestore** stores the thread and its messages for history, pagination, and analytics.
+
+**Cloud SQL** stores the proposal lifecycle: proposed, approved, edited, rejected, executed, or failed, with an event trail.
+
+---
+
+## API
+
+Authenticated routes expect a JWT bearer token. Health routes do not.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/chat` | Main advisory endpoint |
-| `GET` | `/threads` | List conversation threads (paginated) |
-| `GET` | `/threads/{id}/messages` | Fetch thread messages (paginated) |
-| `DELETE` | `/threads/{id}` | Delete a thread and all messages |
-| `GET` | `/analytics` | Conversation stats for the authenticated user |
-| `GET` | `/health` | API liveness probe |
-| `GET` | `/health/firestore` | Firestore write/read/delete health check |
-| `GET` | `/health/redis` | Redis ping health check |
-| `GET` | `/ready` | Full readiness probe (graph + Redis + Firestore) |
+| `POST` | `/chat` | One turn. Returns an answer, or pauses on a proposal. |
+| `POST` | `/chat/stream` | Same turn as server-sent events (stage, tokens, done). |
+| `POST` | `/proposals/{id}/decide` | Approve, edit, or reject a pending proposal. |
+| `GET` | `/proposals` | List proposals for the signed-in user. |
+| `GET` | `/proposals/{id}/events` | Audit trail for one proposal. |
+| `GET` | `/threads` | List conversation threads. |
+| `GET` | `/threads/{id}/messages` | Messages in a thread. |
+| `DELETE` | `/threads/{id}` | Delete a thread. |
+| `GET` | `/health` | Liveness. |
+| `GET` | `/ready` | Graph, Redis, and Firestore readiness. |
 
-**Rate Limiting:** 20 requests per 60-second window per `thread_id`, backed by Redis `INCR + EXPIRE`. Fails open if Redis is unavailable.
-
-**Example Request:**
+Rate limit: 20 requests per 60 seconds per thread, using Redis. If Redis is unavailable, the limiter fails open.
 
 ```bash
 curl -X POST http://localhost:8000/chat \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"user_input": "my cattle have been losing weight", "thread_id": "thread_abc123"}'
+  -d '{"user_input": "my tomato leaves are yellow", "thread_id": "thread_abc123"}'
 ```
 
-**Assessment Response:**
-
-```json
-{
-  "status": "requires_input",
-  "ui": {
-    "type": "quiz",
-    "question": "What type of cattle are you raising?",
-    "options": ["Beef cattle", "Dairy cattle", "Mixed herd", "Not sure"]
-  }
-}
-```
-
-**Advisory Response:**
-
-```json
-{
-  "status": "complete",
-  "advice": "Based on your farm context, your cattle may be experiencing nutritional deficiency...",
-  "advisory_type": "livestock",
-  "recommendations": ["Check feed quality", "Consult a vet for blood panel", "Review pasture rotation"]
-}
-```
+A write comes back as proposals to approve, not as a completed mutation. Approving resumes the same thread and runs only the allowlisted tool.
 
 ---
 
@@ -203,38 +196,37 @@ curl -X POST http://localhost:8000/chat \
 
 | Layer | Technology |
 |---|---|
-| LLM | Google Gemini 2.5 Flash Lite (`langchain-google-genai` / Vertex AI) |
-| AI Orchestration | LangGraph (StateGraph, conditional edges, interrupts, checkpointing) |
-| RAG | Firestore Vector Search + `text-embedding-004` |
-| API | FastAPI 0.100+ / Uvicorn |
-| Short-Term Memory | Redis (message buffer + LangGraph RedisSaver) |
-| Long-Term Storage | Google Cloud Firestore |
-| Relational Database | Google Cloud SQL |
-| Weather | Open-Meteo API (LangChain tool wrapper) |
-| Authentication | JWT HS256 (`python-jose`) |
+| LLM | Google Gemini 2.5 Flash Lite |
+| Orchestration | LangGraph (StateGraph, conditional edges, interrupts, checkpoints) |
+| RAG | Firestore vector search + `text-embedding-004` |
+| API | FastAPI, Uvicorn, SSE |
+| Short-term memory | Redis |
+| Chat history | Firestore |
+| Proposals | Cloud SQL |
+| Weather | Open-Meteo |
+| Auth | JWT |
 | Validation | Pydantic v2 |
-| Frontend | Next.js, React 19, TypeScript, Tailwind CSS |
-| Containerization | Docker, Docker Compose |
-| Cloud | GCP (Vertex AI, Firestore, Memorystore Redis, Cloud SQL) |
-| Testing | pytest (unit + integration) |
+| Frontend | React, TypeScript |
+| Runtime | Docker, GCP |
 
 ---
 
+## Engineering decisions
 
-## Key Engineering Decisions
+**Read-only specialists.** Binding write tools inside the answer loop makes “the model decided to save” a normal bug. Stripping them up front means a write can only exist as a proposal.
 
-**Why LangGraph over a simple chain?** The diagnostic conversation requires stateful, multi-turn logic with conditional branching — LangGraph's StateGraph and interrupt mechanism made this clean and maintainable compared to a linear chain.
+**Tool-level allowlist.** The registry is the list of mutations Saige is willing to perform. Arguments are not a second allowlist. Each executor accepts a fixed set of fields, and the farmer can edit those fields before anything runs.
 
-**Why Firestore for RAG?** Firestore's native vector search with `text-embedding-004` eliminated the need for a separate vector database, reducing infrastructure complexity while still supporting top-K similarity retrieval across multiple knowledge collections.
+**Interrupt instead of a side channel.** LangGraph pauses on the proposal and resumes on the farmer’s decision, so approval is the same conversation, not a separate job queue.
 
-**Why Redis for short-term memory?** Injecting recent conversation history into each LLM call is critical for coherent multi-turn conversations. Redis provides sub-millisecond access and TTL-based automatic cleanup, making it ideal for session-scoped memory.
+**Hybrid routing.** Keyword routes are fast. The LLM route runs when the question spans domains or the keywords are weak.
 
-**Why a hybrid router?** Pure keyword routing is fast but breaks on ambiguous queries. Pure LLM routing is accurate but slow. The hybrid approach — keyword scoring first, LLM fallback only when needed — balances speed and accuracy.
+**Firestore for retrieval.** Native vector search avoided a separate vector database while still supporting top-K lookup across livestock, crop, product, and news collections.
 
 ---
 
 ## About
 
-Built by **David** as a Generative AI Engineer at **Oatmeal AI** — a platform designed to make expert agricultural knowledge accessible to every farmer through conversational AI.
+Built by **David** as a Generative AI Engineer at **Oatmeal AI**.
 
-**Connect:** [LinkedIn](www.linkedin.com/in/devidbanoth) · [GitHub](https://github.com/dbanoth)
+**Connect:** [LinkedIn](https://www.linkedin.com/in/devidbanoth) · [GitHub](https://github.com/dbanoth)
