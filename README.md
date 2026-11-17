@@ -16,9 +16,11 @@
 
 ## Overview
 
-Saige is the farm assistant inside Oatmeal AI. A farmer asks in plain language — “my tomato leaves are yellow,” “should I irrigate the north field,” “update my business phone” — and Saige answers from the farmer’s account, live weather, and a retrieval-backed knowledge base.
+Saige is the farm assistant inside Oatmeal AI. A farmer asks in plain language — “my tomato leaves are yellow,” “how is the north field,” “should I irrigate,” “update my business phone” — and Saige answers from that farm’s records, live weather, and a retrieval-backed knowledge base.
 
 Reads happen in the same turn. Writes do not. Specialist agents can look things up, but they cannot mutate farm data. A write is proposed, checked, and shown to the farmer as approve, edit, or reject. Only an allowlisted tool runs after that approval.
+
+Two paths sit beside that chat graph. Precision-ag questions are answered from the signed-in business’s own fields (vegetation indices, water, alerts, scouting), with a chart when the data supports one. A crop photo skips the graph and returns a scan card from a local vision model plus Gemini.
 
 ---
 
@@ -34,8 +36,10 @@ I designed and built the Saige backend: the agent graph, the retrieval pipeline,
 - Added a non-LLM policy check before approval (credentials, restricted inputs, risk class)
 - Built the RAG pipeline on Firestore vector search and `text-embedding-004`
 - Integrated Google Gemini 2.5 Flash Lite for routing, specialist answers, and the final reply
+- Grounded precision-ag answers in the farmer’s own fields (indices, water, alerts, scouting) and attached charts without letting those reads start equipment
+- Added a crop-photo path that returns a scan card without running the specialist graph
 - Shipped the FastAPI API with JWT auth, per-thread rate limits, SSE streaming, and health checks
-- Used Redis for short-term memory and LangGraph checkpoints, Firestore for chat history, and Cloud SQL for the proposal record
+- Used Redis for short-term memory and LangGraph checkpoints, Firestore for chat history, and SQL for the proposal record
 
 ---
 
@@ -49,7 +53,7 @@ FastAPI  ──── JWT ──── Rate limit (Redis)
         │
         ├── Redis        short-term memory + graph checkpoints
         ├── Firestore    chat history + RAG collections
-        ├── Cloud SQL    proposal records (approve / edit / reject)
+        ├── SQL          proposal records (approve / edit / reject)
         │
         └── LangGraph
               User Agent
@@ -83,7 +87,7 @@ Loads who is asking: person, business, active field, preferences, and recent mem
 
 **2. Supervisor**
 
-A hybrid router picks one or more specialists. Keyword matches run first. If the question is ambiguous, Gemini returns a structured route list. A joke is a short exit and does not enter the specialist loop. When the question belongs to another product assistant, the supervisor records a handoff instead of answering outside Saige’s scope.
+A hybrid router picks one or more specialists. Clear field questions (NDVI, alerts, irrigation, stress) are pinned before the model can mis-route them. Otherwise keyword matches run first, and Gemini returns a structured route list when the question is ambiguous. A joke is a short exit and does not enter the specialist loop. When the question belongs to another product assistant, the supervisor records a handoff instead of answering outside Saige’s scope.
 
 **3. Specialists**
 
@@ -128,12 +132,34 @@ Examples of proposed writes: update a business profile, create or edit a field, 
 | Crop | Disease, soil, agronomy, planting |
 | Livestock | Breeds, health, husbandry |
 | Weather | Current conditions and forecast (Open-Meteo) |
-| Monitoring | Field alerts, scouting, activity context |
-| Account | Profile and field facts for the signed-in business |
+| Monitoring | The farmer’s own fields: vegetation indices, alerts, zones, scouting, activity |
+| Account | Profile and identity for the signed-in person. Field create and edit are proposed here, not answered as advice |
 | Product knowledge | Oatmeal AI product and equipment docs |
 | News | Agricultural news and market context |
 
 One turn can hit more than one specialist. “My cattle are losing weight and I changed the corn” can gather livestock and crop context before the synthesizer answers.
+
+---
+
+## Precision agriculture
+
+Precision ag in Saige is the farmer’s fields, not a generic agronomy article. “How is the north field,” “which field needs attention,” and “should I irrigate” are answered from records that belong to the signed-in business. Another farm’s field is not readable.
+
+| They can ask | What comes back |
+|---|---|
+| How is this field, or show the vegetation history | Latest indices and a time series, interpreted into a next step |
+| Which field is best or worst | A whole-farm ranking, or a side-by-side comparison |
+| Any alerts, where is it stressed | Open alerts and management zones on the latest raster |
+| Should I irrigate, is the field dry | A water recommendation from evapotranspiration, rain, and soil moisture. It does not start a pump |
+| What was applied, what did scouting see | Soil tests, scout notes, and the operation log, so advice does not repeat a spray or fertilizer that just went out |
+
+Charts can ride along with the reply. Creating a field, logging irrigation, logging a scout note, or approving a spray is still a proposal. The farmer says yes before anything is written.
+
+---
+
+## Crop photos
+
+A message that includes a field photo does not enter the supervisor graph. A local crop model and Gemini vision return a scan card: what the image shows, and a practical next step. A stand count is available when the message names a field and a sample area. The write-approval rules above do not change. A photo does not mutate the field.
 
 ---
 
@@ -158,7 +184,7 @@ RAG is skipped cleanly when Firestore or the embedding stack is unavailable. The
 
 **Firestore** stores the thread and its messages for history, pagination, and analytics.
 
-**Cloud SQL** stores the proposal lifecycle: proposed, approved, edited, rejected, executed, or failed, with an event trail.
+**SQL** stores the proposal lifecycle: proposed, approved, edited, rejected, executed, or failed, with an event trail.
 
 ---
 
@@ -202,8 +228,9 @@ A write comes back as proposals to approve, not as a completed mutation. Approvi
 | API | FastAPI, Uvicorn, SSE |
 | Short-term memory | Redis |
 | Chat history | Firestore |
-| Proposals | Cloud SQL |
+| Proposals | SQL |
 | Weather | Open-Meteo |
+| Field photos | Local crop model + Gemini vision |
 | Auth | JWT |
 | Validation | Pydantic v2 |
 | Frontend | React, TypeScript |
@@ -226,6 +253,8 @@ A write comes back as proposals to approve, not as a completed mutation. Approvi
 ---
 
 ## About
+
+Saige is a farm assistant that answers in one thread across crops, livestock, weather, precision agriculture, and product knowledge. Specialists stay read-only. A change to the farm is a proposal until a person approves, edits, or rejects it, and only an allowlisted tool runs after that.
 
 Built by **David** as a Generative AI Engineer at **Oatmeal AI**.
 
