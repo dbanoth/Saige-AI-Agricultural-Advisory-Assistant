@@ -26,7 +26,7 @@ Two paths sit beside that chat graph. Precision-ag questions are answered from t
 
 ## My Role
 
-**Generative AI Engineer** at Oatmeal AI
+**AI Engineer (Entry Level)** at Oatmeal AI
 
 I designed and built the Saige backend: the agent graph, the retrieval pipeline, the API, and the write-approval boundary. Contributions include:
 
@@ -256,6 +256,6 @@ A write comes back as proposals to approve, not as a completed mutation. Approvi
 
 Saige is a farm assistant that answers in one thread across crops, livestock, weather, precision agriculture, and product knowledge. Specialists stay read-only. A change to the farm is a proposal until a person approves, edits, or rejects it, and only an allowlisted tool runs after that.
 
-Built by **David** as a Generative AI Engineer at **Oatmeal AI**.
+Built by **David** as a Entry level AI Engineer at **Oatmeal AI**.
 
 **Connect:** [LinkedIn](https://www.linkedin.com/in/devidbanoth) · [GitHub](https://github.com/dbanoth)
